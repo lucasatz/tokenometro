@@ -1,8 +1,8 @@
 {
   "name": "tokenometro",
   "displayName": "Tokenômetro",
-  "description": "Prevê se no seu ritmo o limite do seu Claude Code vai acabar.",
-  "version": "0.1.0",
+  "description": "Saiba se, no seu ritmo, os tokens do Claude Code vão acabar antes de o limite renovar.",
+  "version": "0.1.1",
   "publisher": "lucasatz",
   "license": "MIT",
   "repository": {
@@ -24,10 +24,13 @@
     "vscode": "^1.90.0"
   },
   "categories": [
+    "AI",
     "Other"
   ],
   "keywords": [
+    "claude",
     "claude code",
+    "limite",
     "usage",
     "rate limit",
     "forecast",

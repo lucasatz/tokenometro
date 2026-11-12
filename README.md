@@ -6,11 +6,13 @@ O Claude Code mostra quanto do limite você já usou. O Tokenômetro mostra para
 
 ## Para quem é
 
-Para quem usa o Claude Code no VS Code com um plano de assinatura (Pro, Max ou Team), que tem limite de uso de 5 horas e limite semanal.
+Para quem usa o Claude Code no VS Code com um plano de assinatura (Pro, Max ou Team), que tem limite de uso de 5 horas e limite semanal. A extensão do Claude Code é instalada junto, se ainda não estiver.
 
 ## O que aparece
 
-Uma linha acima do campo de mensagem do Claude Code:
+Uma linha acima do campo de mensagem do Claude Code, depois do nome `tokenometro plugin`:
+
+![Previsão do Tokenômetro acima do campo de mensagem do Claude Code](imagens/linha.png)
 
 | Linha | O que quer dizer |
 |---|---|
@@ -25,7 +27,9 @@ Quando a previsão passa a dizer que um limite vai acabar, aparece também um av
 > Atenção: se continuar nesse ritmo, o limite semanal irá esgotar quinta, 19/11, às 15h00.
 > Ele só renova sexta, 20/11, às 00h00.
 
-Digite `/limite` no Claude Code para ver o detalhe: quanto já foi usado, o ritmo por hora de uso, quando renova e até quanto o ritmo pode subir ou precisa cair para chegar à renovação.
+Digite `/limite` no Claude Code para abrir o painel do Tokenômetro ao lado e ver o detalhe: quanto já foi usado, o ritmo por hora de uso, quando renova e até quanto o ritmo pode subir ou precisa cair para chegar à renovação.
+
+![Detalhe da previsão mostrado pelo comando /limite](imagens/limite.png)
 
 ## Exemplos
 
@@ -48,7 +52,7 @@ Digite `/limite` no Claude Code para ver o detalhe: quanto já foi usado, o ritm
 
 ## Instalação
 
-1. Instale a extensão.
+1. Instale pelo [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=lucasatz.tokenometro) ou, no VS Code, pela aba Extensões, buscando **Tokenômetro**.
 2. Na janela que aparece, clique em **Instalar**. A extensão instala no Claude Code o plugin que faz o cálculo.
 3. Abra uma nova sessão do Claude Code. A previsão aparece depois da primeira resposta.
 
@@ -98,6 +102,14 @@ Nada sai da sua máquina. A extensão não tem servidor e não coleta dados: ela
 - Validação do plugin: `claude plugin validate plugin`
 - Pacote da extensão: `npx @vscode/vsce package`
 
+## Sugestões e problemas
+
+Abra uma [issue no GitHub](https://github.com/lucasatz/tokenometro/issues). Para problemas, informe a versão do Claude Code e, se puder, o texto que aparece no `/limite`.
+
+## Licença
+
+[MIT](LICENSE)
+
 ---
 
-Não é um produto da Anthropic.
+Projeto independente, sem vínculo com a Anthropic. Claude e Claude Code são marcas da Anthropic.
