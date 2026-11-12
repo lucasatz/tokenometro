@@ -3,7 +3,7 @@
   "displayName": "Tokenômetro",
   "description": "Prevê se no seu ritmo o limite do seu Claude Code vai acabar.",
   "version": "0.1.0",
-  "publisher": "seu-publisher",
+  "publisher": "lucasatz",
   "license": "MIT",
   "repository": {
     "type": "git",
