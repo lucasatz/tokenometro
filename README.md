@@ -6,11 +6,11 @@ O Claude Code mostra quanto do limite você já usou. O Tokenômetro mostra para
 
 ## Para quem é
 
-Para quem usa o Claude Code no VS Code com um plano de assinatura (Pro, Max ou Team), que tem limite de uso de 5 horas e limite semanal. A extensão do Claude Code é instalada junto, se ainda não estiver.
+Para quem usa o Claude Code no VS Code com um plano de assinatura (Pro, Max ou Team), que tem limite de uso de 5 horas e limite semanal. A extensão do Claude Code é instalada junto, se ainda não estiver. Depois de instalada, a previsão aparece também no Claude Code aberto pelo terminal, na mesma máquina.
 
 ## O que aparece
 
-Uma linha acima do campo de mensagem do Claude Code, depois do nome `tokenometro plugin`:
+No VS Code, uma linha acima do campo de mensagem do Claude Code, depois do nome `tokenometro plugin`. No terminal, o aviso aparece na faixa logo acima do campo de mensagem, só quando um limite vai acabar antes de renovar; dentro dos limites, o estado fica discreto no fim da linha de dicas, abaixo do campo.
 
 ![Previsão do Tokenômetro acima do campo de mensagem do Claude Code](imagens/linha.png)
 
@@ -27,7 +27,7 @@ Quando a previsão passa a dizer que um limite vai acabar, aparece também um av
 > Atenção: se continuar nesse ritmo, o limite semanal irá esgotar quinta, 19/11, às 15h00.
 > Ele só renova sexta, 20/11, às 00h00.
 
-Digite `/limite` no Claude Code para abrir o painel do Tokenômetro ao lado e ver o detalhe: quanto já foi usado, o ritmo por hora de uso, quando renova e até quanto o ritmo pode subir ou precisa cair para chegar à renovação.
+Digite `/limite` no Claude Code para ver o detalhe na conversa: quanto já foi usado, o ritmo por hora de uso, quando renova e até quanto o ritmo pode subir ou precisa cair para chegar à renovação.
 
 ![Detalhe da previsão mostrado pelo comando /limite](imagens/limite.png)
 
@@ -74,7 +74,7 @@ Pela paleta de comandos (Ctrl+Shift+P):
 
 ## Configuração
 
-- **Tokenômetro: Abrir Painel Ao Iniciar** (desligada por padrão): abre o painel do Tokenômetro ao lado do Claude Code toda vez que uma sessão começa. Desligada, a previsão fica acima do campo de mensagem e o painel abre com `/limite`. A mudança vale a partir da próxima sessão.
+- **Tokenômetro: Abrir Painel Ao Iniciar** (desligada por padrão): abre o painel do Tokenômetro toda vez que uma sessão começa, no lugar da linha junto ao campo de mensagem. No VS Code e no terminal em tela cheia, ele fica numa coluna ao lado da conversa; no terminal comum, acima do campo de mensagem, com uma linha de altura. A mudança vale a partir da próxima sessão.
 - **Tokenômetro: Barra De Status** (desligada por padrão): mostra a previsão também na barra de status do VS Code.
 
 ## Limitações

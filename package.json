@@ -2,7 +2,7 @@
   "name": "tokenometro",
   "displayName": "Tokenômetro",
   "description": "Saiba se, no seu ritmo, os tokens do Claude Code vão acabar antes de o limite renovar.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "lucasatz",
   "license": "MIT",
   "repository": {
@@ -55,7 +55,7 @@
         "tokenometro.abrirPainelAoIniciar": {
           "type": "boolean",
           "default": false,
-          "description": "Abrir o painel do Tokenômetro ao lado do Claude Code toda vez que uma sessão começar. Desligado, a previsão aparece acima do campo de mensagem e o painel abre com o comando /limite."
+          "description": "Abrir o painel do Tokenômetro toda vez que uma sessão do Claude Code começar, no lugar da linha junto ao campo de mensagem. No VS Code e no terminal em tela cheia, o painel fica numa coluna ao lado da conversa."
         }
       }
     },

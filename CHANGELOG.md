@@ -1,5 +1,11 @@
 # Alterações
 
+## 0.1.2
+
+- No terminal, o aviso aparece na faixa logo acima do campo de mensagem, sem o nome do plugin na frente, e só quando um limite vai acabar antes de renovar. Dentro dos limites, o estado fica discreto no fim da linha de dicas, abaixo do campo.
+- O `/limite` mostra o detalhe na conversa e não abre mais o painel. No terminal em tela cheia, o painel ocupava uma coluna inteira ao lado da conversa.
+- Quando o painel é aberto pela opção de abrir ao iniciar, ele pede só o espaço da linha: uma linha de altura acima do campo de mensagem ou uma coluna estreita, com a linha quebrada, ao lado da conversa.
+
 ## 0.1.1
 
 - Descrição revista.
