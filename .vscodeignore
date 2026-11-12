@@ -1,0 +1,8 @@
+**/*.test.ts
+**/*.test.tsx
+**/.claude-plugin/types/**
+**/tsconfig.json
+*.vsix
+icon-512.png
+ferramentas/**
+.gitignore

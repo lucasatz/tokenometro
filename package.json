@@ -1,0 +1,69 @@
+{
+  "name": "tokenometro",
+  "displayName": "Tokenômetro",
+  "description": "Prevê se no seu ritmo o limite do seu Claude Code vai acabar.",
+  "version": "0.1.0",
+  "publisher": "seu-publisher",
+  "license": "MIT",
+  "icon": "icon.png",
+  "preview": true,
+  "pricing": "Free",
+  "galleryBanner": {
+    "color": "#1E2A4A",
+    "theme": "dark"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "claude code",
+    "usage",
+    "rate limit",
+    "forecast",
+    "tokens"
+  ],
+  "extensionDependencies": [
+    "anthropic.claude-code"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Tokenômetro",
+      "properties": {
+        "tokenometro.barraDeStatus": {
+          "type": "boolean",
+          "default": false,
+          "description": "Mostrar a previsão também na barra de status do VS Code. Ela já aparece dentro do painel do Claude Code, acima do campo de mensagem."
+        },
+        "tokenometro.abrirPainelAoIniciar": {
+          "type": "boolean",
+          "default": false,
+          "description": "Abrir o painel do Tokenômetro ao lado do Claude Code toda vez que uma sessão começar. Desligado, a previsão aparece acima do campo de mensagem e o painel abre com o comando /limite."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "tokenometro.mostrarDetalhes",
+        "title": "Mostrar previsão de uso",
+        "category": "Tokenômetro"
+      },
+      {
+        "command": "tokenometro.instalarPlugin",
+        "title": "Instalar plugin no Claude Code",
+        "category": "Tokenômetro"
+      },
+      {
+        "command": "tokenometro.removerPlugin",
+        "title": "Remover plugin do Claude Code",
+        "category": "Tokenômetro"
+      }
+    ]
+  }
+}
