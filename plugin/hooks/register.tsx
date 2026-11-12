@@ -2,6 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionRateLimit } from 'claude-code'
 
 import {
+  DENTRO_DOS_LIMITES,
   duracaoDe,
   type FormatoHora,
   type Janela,
@@ -28,6 +29,16 @@ const linha = atom({ plugin: 'tokenometro', key: 'linha' } as const, null)
 // A linha de status leva o nome do plugin na frente; o painel, sozinho, não leva título nenhum.
 // Enquanto o painel não está na tela, a previsão vai para a linha de status para não sumir.
 let noPainel = false
+// No terminal a previsão vai para a faixa acima do prompt e para a dica abaixo dele, sem o "tokenometro plugin"
+// na frente. Nas outras telas fica a linha de status: o VS Code desenha a faixa como um quadro com título,
+// que ocupa mais espaço que a linha
+let naFaixa = false
+
+function sairDaLinhaDeStatus($: EngineInterface): void {
+  if (naFaixa) return
+  naFaixa = true
+  $.ui.status(undefined)
+}
 
 const SEM_LEITURA =
   'Ainda não há leitura do limite nesta sessão.\n' +
@@ -35,11 +46,13 @@ const SEM_LEITURA =
 
 async function mostrar($: EngineInterface, texto: string | undefined): Promise<void> {
   await update($, linha, () => texto ?? null)
-  $.ui.status(noPainel ? undefined : texto)
+  $.ui.status(noPainel || naFaixa ? undefined : texto)
 }
 
+// A previsão é uma linha só: acima do prompt pede uma linha de altura e, encaixado ao lado da conversa
+// (terminal em tela cheia), a menor largura que cabe a linha, para não tomar espaço do trabalho
 async function abrirPainel($: EngineInterface): Promise<void> {
-  const aberto = await $.ui.open({ id: PAINEL, title: 'Tokenômetro' })
+  const aberto = await $.ui.open({ id: PAINEL, title: 'Tokenômetro', rows: 1, columns: 30 })
   noPainel = aberto.isPlaced
   if (noPainel) $.ui.status(undefined)
 }
@@ -155,7 +168,7 @@ export const register: Register = on => {
     const ran = await next(e)
     await $.command.register({
       name: 'limite',
-      description: 'Abre o painel de uso de tokens e mostra a previsão dos limites no seu ritmo',
+      description: 'Mostra a previsão dos limites de uso no seu ritmo',
     })
     if (await abrirAoIniciar($)) await abrirPainel($)
     const uso = await $.session.usage()
@@ -172,8 +185,8 @@ export const register: Register = on => {
     return next(e)
   })
 
+  // O detalhe sai na conversa; o painel não abre aqui porque no terminal em tela cheia ele ocupa uma coluna inteira
   on('command.run', { command: 'limite' }, async $ => {
-    await abrirPainel($)
     const uso = await $.session.usage()
     const { previsoes, ignorados, agora, formato } = await atualizar($, uso.rateLimits, false)
     if (!previsoes.length && !ignorados.length) return { text: SEM_LEITURA }
@@ -186,7 +199,7 @@ export const register: Register = on => {
   on('ui.close', async ($, e, next) => {
     if (e.id === PAINEL && e.origin !== 'unload') {
       noPainel = false
-      $.ui.status((await read($, linha)) ?? undefined)
+      if (!naFaixa) $.ui.status((await read($, linha)) ?? undefined)
     }
     return next(e)
   }).catch(($, e, next) => next(e))
@@ -194,11 +207,34 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane', requestId: PAINEL }, async ($, e) => {
     const { Text } = $.ui.resolve(e)
     const texto = await read($, linha)
-    // Uma linha só: o que não couber é cortado no fim, em vez de quebrar
+    // Acima do prompt fica numa linha só, cortada no fim; na coluna estreita ao lado da conversa quebra a linha,
+    // senão a data de renovação some
     return (
-      <Text wrap="truncate-end" size="caption" dimColor={texto === null}>
+      <Text wrap={e.props.placement === 'dock' ? 'wrap' : 'truncate-end'} size="caption" dimColor={texto === null}>
         {texto ?? 'Uso de tokens: aguardando a primeira leitura do limite.'}
       </Text>
     )
+  })
+
+  // A faixa acima do prompt só aparece com aviso: dentro dos limites ela fica livre e o estado vai para a dica
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (e.surface !== 'terminal') return next(e)
+    sairDaLinhaDeStatus($)
+    const texto = await read($, linha)
+    if (e.props.hasSurvey || noPainel || texto === null || texto === DENTRO_DOS_LIMITES) return next(e)
+    const { Text } = $.ui.resolve(e)
+    return (
+      <Text color="warning" wrap="truncate-end">
+        {texto}
+      </Text>
+    )
+  })
+
+  on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
+    if (e.surface !== 'terminal') return next(e)
+    sairDaLinhaDeStatus($)
+    const texto = await read($, linha)
+    if (noPainel || texto !== DENTRO_DOS_LIMITES) return next(e)
+    return next({ ...e, props: { ...e.props, tail: `· ${texto}` } })
   })
 }
