@@ -1,6 +1,6 @@
 {
   "name": "tokenometro",
-  "version": "0.5.2",
-  "description": "Prevê se no seu ritmo o limite do seu Claude Code vai acabar.",
+  "version": "0.5.3",
+  "description": "Saiba se, no seu ritmo, os tokens do Claude Code vão acabar antes de o limite renovar.",
   "types": "./types/index.d.ts"
 }
