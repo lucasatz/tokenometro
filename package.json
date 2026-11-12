@@ -5,6 +5,14 @@
   "version": "0.1.0",
   "publisher": "seu-publisher",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lucasatz/tokenometro.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lucasatz/tokenometro/issues"
+  },
+  "homepage": "https://github.com/lucasatz/tokenometro#readme",
   "icon": "icon.png",
   "preview": true,
   "pricing": "Free",
