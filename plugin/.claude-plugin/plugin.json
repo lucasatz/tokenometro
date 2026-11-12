@@ -1,0 +1,6 @@
+{
+  "name": "tokenometro",
+  "version": "0.5.2",
+  "description": "Prevê se no seu ritmo o limite do seu Claude Code vai acabar.",
+  "types": "./types/index.d.ts"
+}
