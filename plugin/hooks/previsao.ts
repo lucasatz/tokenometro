@@ -49,6 +49,13 @@ const PERTO_DO_LIMITE = 90
 // Previsão abaixo disso na renovação: sobra limite, dá para usar mais
 const FOLGA = 60
 
+// Português do Brasil é o padrão; o inglês é a opção da extensão (tokenometro.idioma)
+export type Idioma = 'pt-BR' | 'en'
+
+export function lerIdioma(valor: unknown): Idioma {
+  return valor === 'en' ? 'en' : 'pt-BR'
+}
+
 function modeloDoLimite(kind: string): string {
   // Nome interno do "Fable limit" no painel de uso do Claude Code
   if (kind === 'seven_day_overage_included') return 'Fable'
@@ -56,22 +63,40 @@ function modeloDoLimite(kind: string): string {
   return modelo ? `${modelo.charAt(0).toUpperCase()}${modelo.slice(1)}` : ''
 }
 
-export function nomeLimite(kind: string): string {
-  if (kind === 'five_hour') return '5hr'
-  if (kind === 'seven_day') return '7 day'
+// Em inglês, os mesmos nomes do painel de uso do Claude Code
+export function nomeLimite(kind: string, idioma: Idioma = 'pt-BR'): string {
+  const ingles = idioma === 'en'
+  if (kind === 'five_hour') return ingles ? '5hr' : '5h'
+  if (kind === 'seven_day') return ingles ? '7 day' : '7 dias'
   const modelo = modeloDoLimite(kind)
-  return modelo ? `${modelo} limit` : kind
+  if (!modelo) return kind
+  return ingles ? `${modelo} limit` : modelo
 }
 
-// Nome por extenso, em português, para o aviso na tela
-function nomeLongo(kind: string): string {
+// Nome por extenso, para o aviso na tela
+function nomeLongo(kind: string, idioma: Idioma): string {
+  const modelo = modeloDoLimite(kind)
+  if (idioma === 'en') {
+    if (kind.startsWith('five_hour')) return 'the 5-hour limit'
+    if (kind === 'seven_day') return 'the weekly limit'
+    return modelo ? `the weekly ${modelo} limit` : `the ${kind} limit`
+  }
   if (kind.startsWith('five_hour')) return 'o limite de 5 horas'
   if (kind === 'seven_day') return 'o limite semanal'
-  const modelo = modeloDoLimite(kind)
   return modelo ? `o limite semanal do ${modelo}` : `o limite ${kind}`
 }
 
 export const DENTRO_DOS_LIMITES = 'Uso de tokens dentro dos limites'
+const DENTRO_DOS_LIMITES_EN = 'Token usage within limits'
+
+export function dentroDosLimites(idioma: Idioma = 'pt-BR'): string {
+  return idioma === 'en' ? DENTRO_DOS_LIMITES_EN : DENTRO_DOS_LIMITES
+}
+
+// A linha gravada pode ter vindo de qualquer um dos dois idiomas
+export function eDentroDosLimites(texto: string | null): boolean {
+  return texto === DENTRO_DOS_LIMITES || texto === DENTRO_DOS_LIMITES_EN
+}
 
 export function registrarAmostra(
   janela: Janela | undefined,
@@ -162,7 +187,8 @@ export function prever(
     ritmoPorHora: null,
     origem: null,
     horasRestantes: 0,
-    esgotaEm: null,
+    // Limite já esgotado conta como risco mesmo sem ritmo medido
+    esgotaEm: pct >= 100 ? agora : null,
     pctNaRenovacao: null,
   }
   const duracao = duracaoDe(kind)
@@ -244,8 +270,9 @@ export function nivelRisco(p: Previsao, agora: number): number {
   return (p.esgotaEm ?? agora) - agora <= 30 * MINUTO ? 2 : 1
 }
 
-function decimal(n: number): string {
-  return n.toFixed(1).replace('.', ',')
+function decimal(n: number, idioma: Idioma): string {
+  const texto = n.toFixed(1)
+  return idioma === 'en' ? texto : texto.replace('.', ',')
 }
 
 export type FormatoHora = { preset: 'auto' | '12-hour' | '24-hour' | '24-hour-utc'; timeZone?: string }
@@ -279,8 +306,18 @@ function chaveDia(ms: number, fuso: string | undefined): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: fuso, year: 'numeric', month: '2-digit', day: '2-digit' }).format(ms)
 }
 
-// Para o aviso e o /limite, em português: "hoje às 15h40", "amanhã às 09h00", "quinta, 13/11, às 14h30"
-export function quando(ms: number, agora: number, fuso?: string): string {
+// Para o aviso e o /limite: "hoje às 15h40", "amanhã às 09h00", "quinta, 13/11, às 14h30";
+// em inglês, "today at 3:40 PM", "Thursday, Nov 13 at 2:30 PM"
+export function quando(ms: number, agora: number, f: FormatoHora = FORMATO_PADRAO, idioma: Idioma = 'pt-BR'): string {
+  const fuso = f.timeZone
+  const dia = chaveDia(ms, fuso)
+  if (idioma === 'en') {
+    const hora = horaPainel(ms, f, idioma)
+    if (dia === chaveDia(agora, fuso)) return `today at ${hora}`
+    if (dia === chaveDia(agora + DIA, fuso)) return `tomorrow at ${hora}`
+    const data = new Intl.DateTimeFormat('en-US', { timeZone: fuso, weekday: 'long', month: 'short', day: 'numeric' }).format(ms)
+    return `${data} at ${hora}`
+  }
   const partes = new Intl.DateTimeFormat('pt-BR', {
     timeZone: fuso,
     weekday: 'long',
@@ -292,40 +329,52 @@ export function quando(ms: number, agora: number, fuso?: string): string {
   }).formatToParts(ms)
   const parte = (tipo: Intl.DateTimeFormatPartTypes): string => partes.find(p => p.type === tipo)?.value ?? ''
   const hora = `${parte('hour')}h${parte('minute')}`
-  const dia = chaveDia(ms, fuso)
   if (dia === chaveDia(agora, fuso)) return `hoje às ${hora}`
   if (dia === chaveDia(agora + DIA, fuso)) return `amanhã às ${hora}`
   return `${parte('weekday').replace('-feira', '')}, ${parte('day')}/${parte('month')}, às ${hora}`
 }
 
-// No modo "auto" o painel segue o idioma do VS Code; sem idioma definido nele, é o inglês
-const IDIOMA_PAINEL = 'en-US'
-
-function horaPainel(ms: number, f: FormatoHora): string {
-  const opcoes: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit', timeZone: f.timeZone }
-  if (f.preset === '12-hour') opcoes.hourCycle = 'h12'
-  if (f.preset === '24-hour' || f.preset === '24-hour-utc') opcoes.hourCycle = 'h23'
-  const texto = new Intl.DateTimeFormat(IDIOMA_PAINEL, opcoes).format(ms)
-  return f.preset === '24-hour-utc' ? `${texto}Z` : texto
+// Em português, 24 horas, a não ser que o timeFormat do Claude Code peça 12 horas; em inglês, como o painel
+// de uso: 12 horas, a não ser que o timeFormat peça 24
+function horaPainel(ms: number, f: FormatoHora, idioma: Idioma): string {
+  const vinteQuatro = idioma === 'en' ? f.preset === '24-hour' || f.preset === '24-hour-utc' : f.preset !== '12-hour'
+  const opcoes: Intl.DateTimeFormatOptions = {
+    hour: idioma === 'en' ? 'numeric' : '2-digit',
+    minute: '2-digit',
+    timeZone: f.timeZone,
+    hourCycle: vinteQuatro ? 'h23' : 'h12',
+  }
+  const texto = new Intl.DateTimeFormat(idioma === 'en' ? 'en-US' : 'pt-BR', opcoes).format(ms)
+  return f.preset === '24-hour-utc' ? `${texto} UTC` : texto
 }
 
-// A data o painel escreve sempre em inglês, "Thu, Nov 19", com o ano quando não é o deste ano
-function dataPainel(ms: number, agora: number, f: FormatoHora): string {
-  const opcoes: Intl.DateTimeFormatOptions = { timeZone: f.timeZone, weekday: 'short', month: 'short', day: 'numeric' }
-  if (chaveDia(ms, f.timeZone).slice(0, 4) !== chaveDia(agora, f.timeZone).slice(0, 4)) opcoes.year = 'numeric'
-  return new Intl.DateTimeFormat('en-US', opcoes).format(ms)
+// "hoje", "amanhã" ou "qui, 19/11"; em inglês, "Thu, Nov 19", como o painel de uso; com o ano quando não é o deste ano
+function dataPainel(ms: number, agora: number, f: FormatoHora, idioma: Idioma): string {
+  const dia = chaveDia(ms, f.timeZone)
+  const outroAno = dia.slice(0, 4) !== chaveDia(agora, f.timeZone).slice(0, 4)
+  if (idioma === 'en') {
+    const opcoes: Intl.DateTimeFormatOptions = { timeZone: f.timeZone, weekday: 'short', month: 'short', day: 'numeric' }
+    if (outroAno) opcoes.year = 'numeric'
+    return new Intl.DateTimeFormat('en-US', opcoes).format(ms)
+  }
+  if (dia === chaveDia(agora, f.timeZone)) return 'hoje'
+  if (dia === chaveDia(agora + DIA, f.timeZone)) return 'amanhã'
+  const opcoes: Intl.DateTimeFormatOptions = { timeZone: f.timeZone, day: '2-digit', month: '2-digit' }
+  if (outroAno) opcoes.year = 'numeric'
+  const semana = new Intl.DateTimeFormat('pt-BR', { timeZone: f.timeZone, weekday: 'short' }).format(ms).replace('.', '')
+  return `${semana}, ${new Intl.DateTimeFormat('pt-BR', opcoes).format(ms)}`
 }
 
-// Regra do painel: só a hora quando falta menos de um dia no limite de 5 horas; nos outros, dia e hora
-export function quandoPainel(ms: number, agora: number, kind: string, f: FormatoHora): string {
-  if (ms - agora < MINUTO) return 'soon'
-  if (ms - agora < DIA && kind === 'five_hour') return horaPainel(ms, f)
-  return `${dataPainel(ms, agora, f)} at ${horaPainel(ms, f)}`
+// No limite de 5 horas basta a hora quando falta menos de um dia; nos outros, dia e hora
+export function quandoPainel(ms: number, agora: number, kind: string, f: FormatoHora, idioma: Idioma = 'pt-BR'): string {
+  if (ms - agora < MINUTO) return idioma === 'en' ? 'soon' : 'em instantes'
+  if (ms - agora < DIA && kind === 'five_hour') return horaPainel(ms, f, idioma)
+  return `${dataPainel(ms, agora, f, idioma)} ${idioma === 'en' ? 'at' : 'às'} ${horaPainel(ms, f, idioma)}`
 }
 
-// "Resets 13:10" ou "Resets Thu, Nov 19 at 00:00"
-export function renovaPainel(ms: number, agora: number, kind: string, f: FormatoHora): string {
-  return `Resets ${quandoPainel(ms, agora, kind, f)}`
+// "renova 13:10", "renova qui, 19/11 às 00:00"; em inglês, "Resets 1:10 PM", como o painel de uso
+export function renovaPainel(ms: number, agora: number, kind: string, f: FormatoHora, idioma: Idioma = 'pt-BR'): string {
+  return `${idioma === 'en' ? 'Resets' : 'renova'} ${quandoPainel(ms, agora, kind, f, idioma)}`
 }
 
 // Ordem fixa, como no painel: sessão, semana e depois os limites por modelo
@@ -340,55 +389,101 @@ export function textoStatus(
   previsoes: readonly Previsao[],
   agora: number,
   f: FormatoHora = FORMATO_PADRAO,
+  idioma: Idioma = 'pt-BR',
 ): string | undefined {
   if (!previsoes.length) return undefined
   const risco = [...previsoes].filter(vaiEsgotar).sort((a, b) => ordem(a.kind) - ordem(b.kind))
-  if (!risco.length) return DENTRO_DOS_LIMITES
+  if (!risco.length) return dentroDosLimites(idioma)
   const partes = risco.map(
-    p =>
-      `${nomeLimite(p.kind)}: irá esgotar ${quandoPainel(p.esgotaEm ?? agora, agora, p.kind, f)} ` +
-      `(${renovaPainel(p.resetsAt, agora, p.kind, f)})`,
+    p => `${nomeLimite(p.kind, idioma)}: ${situacaoPainel(p, agora, f, idioma)} (${renovaPainel(p.resetsAt, agora, p.kind, f, idioma)})`,
   )
   return `⚠ ${partes.join(' | ')}`
 }
 
-export function textoAviso(p: Previsao, agora: number, f: FormatoHora = FORMATO_PADRAO): string {
-  return (
-    `Atenção: se continuar nesse ritmo, ${nomeLongo(p.kind)} irá esgotar ${quando(p.esgotaEm ?? agora, agora, f.timeZone)}.\n` +
-    `Ele só renova ${quando(p.resetsAt, agora, f.timeZone)}.`
-  )
+// A menos de um minuto, ou com o limite já no fim, "irá esgotar" deixa de descrever a situação
+function situacaoPainel(p: Previsao, agora: number, f: FormatoHora, idioma: Idioma): string {
+  const ingles = idioma === 'en'
+  if (p.pct >= 100) return ingles ? 'used up' : 'esgotado'
+  const esgotaEm = p.esgotaEm ?? agora
+  if (esgotaEm - agora < MINUTO) return ingles ? 'running out now' : 'esgotando agora'
+  const momento = quandoPainel(esgotaEm, agora, p.kind, f, idioma)
+  if (!ingles) return `irá esgotar ${momento}`
+  // Só a hora pede "at" na frente; com a data, o "at" já vem no meio ("Thu, Nov 19 at 3:00 PM")
+  return `runs out ${/^\d/.test(momento) ? 'at ' : ''}${momento}`
 }
 
-const TEXTO_ORIGEM: Record<OrigemRitmo, string> = {
-  recente: 'medido nos últimos 45 minutos',
-  janela: 'média das horas em que você usou nesta janela',
-  anterior: 'da janela anterior, porque esta começou há pouco',
+export function textoAviso(p: Previsao, agora: number, f: FormatoHora = FORMATO_PADRAO, idioma: Idioma = 'pt-BR'): string {
+  const nome = nomeLongo(p.kind, idioma)
+  const renova = quando(p.resetsAt, agora, f, idioma)
+  if (idioma === 'en') {
+    if (p.pct >= 100) return `Heads up: ${nome} is used up.\nIt only resets ${renova}.`
+    return `Heads up: at this pace, ${nome} will run out ${quando(p.esgotaEm ?? agora, agora, f, idioma)}.\nIt only resets ${renova}.`
+  }
+  if (p.pct >= 100) return `Atenção: ${nome} esgotou.\nEle só renova ${renova}.`
+  return `Atenção: se continuar nesse ritmo, ${nome} irá esgotar ${quando(p.esgotaEm ?? agora, agora, f, idioma)}.\nEle só renova ${renova}.`
 }
 
-export function textoDetalhe(p: Previsao, agora: number, f: FormatoHora = FORMATO_PADRAO): string {
-  const linhas = [`${nomeLimite(p.kind)}: ${Math.round(p.pct)}% usado.`, `Renova ${quando(p.resetsAt, agora, f.timeZone)}.`]
-  if (p.ritmoPorHora === null) {
-    linhas.push('A janela começou há pouco: ainda não dá para calcular o ritmo.')
+const TEXTO_ORIGEM: Record<Idioma, Record<OrigemRitmo, string>> = {
+  'pt-BR': {
+    recente: 'medido nos últimos 45 minutos',
+    janela: 'média das horas em que você usou nesta janela',
+    anterior: 'da janela anterior, porque esta começou há pouco',
+  },
+  en: {
+    recente: 'measured over the last 45 minutes',
+    janela: 'average of the hours you used in this window',
+    anterior: 'from the previous window, since this one just started',
+  },
+}
+
+export function textoDetalhe(p: Previsao, agora: number, f: FormatoHora = FORMATO_PADRAO, idioma: Idioma = 'pt-BR'): string {
+  const ingles = idioma === 'en'
+  const d = (n: number): string => decimal(n, idioma)
+  const linhas = ingles
+    ? [`${nomeLimite(p.kind, idioma)}: ${Math.round(p.pct)}% used.`, `Resets ${quando(p.resetsAt, agora, f, idioma)}.`]
+    : [`${nomeLimite(p.kind, idioma)}: ${Math.round(p.pct)}% usado.`, `Renova ${quando(p.resetsAt, agora, f, idioma)}.`]
+  if (p.pct >= 100) {
+    linhas.push(ingles ? 'The limit is used up: it comes back at the reset.' : 'O limite esgotou: volta a valer na renovação.')
     return linhas.join('\n')
   }
-  const origem = p.origem ? ` (${TEXTO_ORIGEM[p.origem]})` : ''
-  linhas.push(`Ritmo: ${decimal(p.ritmoPorHora)}% por hora de uso${origem}.`)
-  linhas.push(`Até a renovação, devem ser cerca de ${decimal(p.horasRestantes)} horas de uso, pelo seu horário.`)
+  if (p.ritmoPorHora === null) {
+    linhas.push(
+      ingles
+        ? 'The window just started: there is not enough data to measure the pace yet.'
+        : 'A janela começou há pouco: ainda não dá para calcular o ritmo.',
+    )
+    return linhas.join('\n')
+  }
+  const origem = p.origem ? ` (${TEXTO_ORIGEM[idioma][p.origem]})` : ''
+  if (ingles) {
+    linhas.push(`Pace: ${d(p.ritmoPorHora)}% per hour of use${origem}.`)
+    linhas.push(`About ${d(p.horasRestantes)} hours of use until the reset, based on your schedule.`)
+  } else {
+    linhas.push(`Ritmo: ${d(p.ritmoPorHora)}% por hora de uso${origem}.`)
+    linhas.push(`Até a renovação, devem ser cerca de ${d(p.horasRestantes)} horas de uso, pelo seu horário.`)
+  }
   const naRenovacao = Math.round(p.pctNaRenovacao ?? p.pct)
   const maximo = ritmoMaximo(p)
   if (vaiEsgotar(p)) {
-    linhas.push(`Atenção: nesse ritmo, irá esgotar ${quando(p.esgotaEm ?? agora, agora, f.timeZone)}, antes de renovar.`)
-    if (maximo !== null) linhas.push(`Para chegar até a renovação, use até ${decimal(maximo)}% por hora de uso.`)
+    const momento = quando(p.esgotaEm ?? agora, agora, f, idioma)
+    linhas.push(ingles ? `Heads up: at this pace, it runs out ${momento}, before the reset.` : `Atenção: nesse ritmo, irá esgotar ${momento}, antes de renovar.`)
+    if (maximo !== null) {
+      linhas.push(ingles ? `To make it to the reset, use at most ${d(maximo)}% per hour of use.` : `Para chegar até a renovação, use até ${d(maximo)}% por hora de uso.`)
+    }
   } else if (pertoDoLimite(p)) {
-    linhas.push(`Perto do limite: nesse ritmo, chega a ${naRenovacao}% na renovação.`)
+    linhas.push(ingles ? `Close to the limit: at this pace, it reaches ${naRenovacao}% at the reset.` : `Perto do limite: nesse ritmo, chega a ${naRenovacao}% na renovação.`)
   } else if (temFolga(p)) {
-    linhas.push(`Pode usar mais: nesse ritmo, chega só a ${naRenovacao}% na renovação.`)
+    linhas.push(ingles ? `Room to spare: at this pace, it only reaches ${naRenovacao}% at the reset.` : `Pode usar mais: nesse ritmo, chega só a ${naRenovacao}% na renovação.`)
     const multiplo = multiploRitmo(p)
     if (maximo !== null && multiplo !== null && multiplo >= 1.1) {
-      linhas.push(`O ritmo pode subir até ${decimal(maximo)}% por hora de uso (${decimal(multiplo)} vezes o atual) sem esgotar.`)
+      linhas.push(
+        ingles
+          ? `The pace can go up to ${d(maximo)}% per hour of use (${d(multiplo)} times the current one) without running out.`
+          : `O ritmo pode subir até ${d(maximo)}% por hora de uso (${d(multiplo)} vezes o atual) sem esgotar.`,
+      )
     }
   } else {
-    linhas.push(`Dentro do limite: nesse ritmo, chega a ${naRenovacao}% na renovação.`)
+    linhas.push(ingles ? `Within the limit: at this pace, it reaches ${naRenovacao}% at the reset.` : `Dentro do limite: nesse ritmo, chega a ${naRenovacao}% na renovação.`)
   }
   return linhas.join('\n')
 }

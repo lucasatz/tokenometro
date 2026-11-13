@@ -2,9 +2,13 @@ import { expect, test } from 'claude-code/testing'
 
 import {
   DENTRO_DOS_LIMITES,
+  FORMATO_PADRAO,
   type Previsao,
   criarPesos,
+  dentroDosLimites,
+  eDentroDosLimites,
   lerFormato,
+  lerIdioma,
   nomeLimite,
   prever,
   registrarAmostra,
@@ -36,7 +40,7 @@ test('5 horas: com uso agora, o ritmo recente diz a hora em que esgota', async (
   expect(p.origem).toBe('recente')
   // 14h-15h conta inteira (uso agora): 90%; depois 0,9 x 30 por hora: os 10% restantes em 22 minutos
   expect(p.esgotaEm).toBe(QUI_14H + HORA + (10 / 27) * HORA)
-  expect(textoStatus([p], QUI_14H)).toBe('⚠ 5hr: irá esgotar 3:22 PM (Resets 5:00 PM)')
+  expect(textoStatus([p], QUI_14H)).toBe('⚠ 5h: irá esgotar 15:22 (renova 17:00)')
 })
 
 test('semana: o fim de semana não entra na conta', async () => {
@@ -55,8 +59,8 @@ test('semana: quando esgota, esgota dentro do horário de uso', async () => {
   const fim = new Date(p.esgotaEm ?? 0)
   expect(fim.getDay()).toBe(4)
   expect(fim.getHours() >= 8 && fim.getHours() < 18).toBe(true)
-  expect(textoStatus([p], quarta18h)?.startsWith('⚠ 7 day: irá esgotar Thu, Nov 12 at ')).toBe(true)
-  expect(textoStatus([p], quarta18h)?.endsWith(' (Resets Mon, Nov 16 at 12:00 AM)')).toBe(true)
+  expect(textoStatus([p], quarta18h)?.startsWith('⚠ 7 dias: irá esgotar amanhã às ')).toBe(true)
+  expect(textoStatus([p], quarta18h)?.endsWith(' (renova seg, 16/11 às 00:00)')).toBe(true)
   // O aviso na tela fica em português, no formato aprovado
   expect(textoAviso(p, quarta18h).startsWith('Atenção: se continuar nesse ritmo, o limite semanal irá esgotar amanhã às ')).toBe(true)
   expect(textoAviso(p, quarta18h)).toContain('Ele só renova segunda, 16/11, às 00h00.')
@@ -71,7 +75,7 @@ test('semana recém-começada usa o ritmo da semana anterior', async () => {
   // Cerca de 48 horas de uso na semana: a 3% por hora de uso, esgota antes de renovar
   const com = prever('seven_day', 1, RENOVA_SEMANA, seg02h, [], undefined, 3)
   expect(com.origem).toBe('anterior')
-  expect(textoStatus([com], seg02h)?.startsWith('⚠ 7 day: irá esgotar ')).toBe(true)
+  expect(textoStatus([com], seg02h)?.startsWith('⚠ 7 dias: irá esgotar ')).toBe(true)
 })
 
 test('a linha mostra só os limites que esgotam, em ordem fixa', async () => {
@@ -84,24 +88,62 @@ test('a linha mostra só os limites que esgotam, em ordem fixa', async () => {
     esgotaEm: new Date(2026, 10, 13, 10, 0).getTime(),
   }
   expect(textoStatus([semana, cinco], QUI_14H)).toBe(
-    '⚠ 5hr: irá esgotar 2:30 PM (Resets 3:00 PM) | ' +
-      '7 day: irá esgotar Fri, Nov 13 at 10:00 AM (Resets Mon, Nov 16 at 12:00 AM)',
+    '⚠ 5h: irá esgotar 14:30 (renova 15:00) | ' +
+      '7 dias: irá esgotar amanhã às 10:00 (renova seg, 16/11 às 00:00)',
   )
   const semanaOk: Previsao = { ...semana, esgotaEm: null, pctNaRenovacao: 70 }
-  expect(textoStatus([semanaOk, cinco], QUI_14H)).toBe('⚠ 5hr: irá esgotar 2:30 PM (Resets 3:00 PM)')
+  expect(textoStatus([semanaOk, cinco], QUI_14H)).toBe('⚠ 5h: irá esgotar 14:30 (renova 15:00)')
   expect(textoStatus([semanaOk], QUI_14H)).toBe(DENTRO_DOS_LIMITES)
 })
 
-test('limite semanal do Fable entra com o nome do painel', async () => {
-  expect(nomeLimite('seven_day_overage_included')).toBe('Fable limit')
+test('limite já esgotado ou a menos de um minuto diz isso, sem "irá esgotar"', async () => {
+  const esgotado = prever('five_hour', 100, QUI_14H + 3 * HORA, QUI_14H, [])
+  expect(vaiEsgotar(esgotado)).toBe(true)
+  expect(textoStatus([esgotado], QUI_14H)).toBe('⚠ 5h: esgotado (renova 17:00)')
+  expect(textoAviso(esgotado, QUI_14H)).toBe('Atenção: o limite de 5 horas esgotou.\nEle só renova hoje às 17h00.')
+  expect(textoDetalhe(esgotado, QUI_14H)).toContain('O limite esgotou: volta a valer na renovação.')
+  const base = { pct: 99, horasRestantes: 1, origem: 'recente' as const, ritmoPorHora: 30, pctNaRenovacao: 150 }
+  const quase: Previsao = { ...base, kind: 'five_hour', resetsAt: QUI_14H + 30 * 1000, esgotaEm: QUI_14H + 20 * 1000 }
+  expect(textoStatus([quase], QUI_14H)).toBe('⚠ 5h: esgotando agora (renova em instantes)')
+})
+
+test('em inglês, a linha segue o painel de uso do Claude Code', async () => {
+  expect(lerIdioma('en')).toBe('en')
+  expect(lerIdioma(undefined)).toBe('pt-BR')
+  expect(lerIdioma('fr')).toBe('pt-BR')
+  const perfil = registrarAtividade(undefined, QUI_14H)
+  const pts = [
+    { t: QUI_14H - 30 * MIN, p: 45 },
+    { t: QUI_14H, p: 60 },
+  ]
+  const p = prever('five_hour', 60, QUI_14H + 3 * HORA, QUI_14H, pts, perfil)
+  expect(textoStatus([p], QUI_14H, FORMATO_PADRAO, 'en')).toBe('⚠ 5hr: runs out at 3:22 PM (Resets 5:00 PM)')
+  expect(textoStatus([p], QUI_14H, lerFormato('24-hour', undefined), 'en')).toBe('⚠ 5hr: runs out at 15:22 (Resets 17:00)')
+  const quarta18h = new Date(2026, 10, 11, 18, 0).getTime()
+  const semana = prever('seven_day', 85, RENOVA_SEMANA, quarta18h, [])
+  expect(textoStatus([semana], quarta18h, FORMATO_PADRAO, 'en')?.startsWith('⚠ 7 day: runs out Thu, Nov 12 at ')).toBe(true)
+  expect(textoStatus([semana], quarta18h, FORMATO_PADRAO, 'en')?.endsWith(' (Resets Mon, Nov 16 at 12:00 AM)')).toBe(true)
+  expect(textoAviso(semana, quarta18h, FORMATO_PADRAO, 'en').startsWith('Heads up: at this pace, the weekly limit will run out tomorrow at ')).toBe(true)
+  expect(textoAviso(semana, quarta18h, FORMATO_PADRAO, 'en')).toContain('It only resets Monday, Nov 16 at 12:00 AM.')
+  expect(textoDetalhe(semana, quarta18h, FORMATO_PADRAO, 'en')).toContain('To make it to the reset, use at most ')
+  const esgotado = prever('five_hour', 100, QUI_14H + 3 * HORA, QUI_14H, [])
+  expect(textoStatus([esgotado], QUI_14H, FORMATO_PADRAO, 'en')).toBe('⚠ 5hr: used up (Resets 5:00 PM)')
+  expect(textoStatus([], QUI_14H, FORMATO_PADRAO, 'en')).toBe(undefined)
+  expect(dentroDosLimites('en')).toBe('Token usage within limits')
+  expect(eDentroDosLimites('Token usage within limits') && eDentroDosLimites(DENTRO_DOS_LIMITES)).toBe(true)
+  expect(nomeLimite('seven_day_overage_included', 'en')).toBe('Fable limit')
+})
+
+test('limite semanal do Fable entra pelo nome do modelo', async () => {
+  expect(nomeLimite('seven_day_overage_included')).toBe('Fable')
   const quarta18h = new Date(2026, 10, 11, 18, 0).getTime()
   const p = prever('seven_day_overage_included', 85, RENOVA_SEMANA, quarta18h, [])
   expect(vaiEsgotar(p)).toBe(true)
-  expect(textoStatus([p], quarta18h)?.startsWith('⚠ Fable limit: irá esgotar Thu, Nov 12 at ')).toBe(true)
+  expect(textoStatus([p], quarta18h)?.startsWith('⚠ Fable: irá esgotar amanhã às ')).toBe(true)
   expect(textoAviso(p, quarta18h)).toContain('o limite semanal do Fable irá esgotar amanhã às ')
 })
 
-test('segue o timeFormat e o timeZone do Claude Code, como o painel de uso', async () => {
+test('em português, segue o timeFormat e o timeZone do Claude Code', async () => {
   const perfil = registrarAtividade(undefined, QUI_14H)
   const pts = [
     { t: QUI_14H - 30 * MIN, p: 45 },
@@ -109,15 +151,13 @@ test('segue o timeFormat e o timeZone do Claude Code, como o painel de uso', asy
   ]
   const p = prever('five_hour', 60, QUI_14H + 3 * HORA, QUI_14H, pts, perfil)
   expect(textoStatus([p], QUI_14H, lerFormato('24-hour', 'America/Sao_Paulo'))).toBe(
-    '⚠ 5hr: irá esgotar 15:22 (Resets 17:00)',
+    '⚠ 5h: irá esgotar 15:22 (renova 17:00)',
   )
-  expect(textoStatus([p], QUI_14H, lerFormato('%H:%M', undefined))).toBe('⚠ 5hr: irá esgotar 15:22 (Resets 17:00)')
+  expect(textoStatus([p], QUI_14H, lerFormato('%H:%M', undefined))).toBe('⚠ 5h: irá esgotar 15:22 (renova 17:00)')
   // Fuso que não existe cai no fuso do sistema, como no Claude Code
-  expect(textoStatus([p], QUI_14H, lerFormato('12-hour', 'Fuso/Inexistente'))).toBe(
-    '⚠ 5hr: irá esgotar 3:22 PM (Resets 5:00 PM)',
-  )
+  expect(textoStatus([p], QUI_14H, lerFormato('12-hour', 'Fuso/Inexistente'))?.startsWith('⚠ 5h: irá esgotar 03:22')).toBe(true)
   const utc = String(new Date(QUI_14H + 3 * HORA).getUTCHours()).padStart(2, '0')
-  expect(textoStatus([p], QUI_14H, lerFormato('24-hour-utc', undefined))?.endsWith(`(Resets ${utc}:00Z)`)).toBe(true)
+  expect(textoStatus([p], QUI_14H, lerFormato('24-hour-utc', undefined))?.endsWith(`(renova ${utc}:00 UTC)`)).toBe(true)
 })
 
 test('o horário aprendido passa a valer: sábado de uso conta', async () => {

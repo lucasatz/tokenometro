@@ -2,11 +2,13 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionRateLimit } from 'claude-code'
 
 import {
-  DENTRO_DOS_LIMITES,
   duracaoDe,
+  eDentroDosLimites,
   type FormatoHora,
+  type Idioma,
   type Janela,
   lerFormato,
+  lerIdioma,
   nomeLimite,
   type Perfil,
   type Previsao,
@@ -22,6 +24,7 @@ import {
 
 type Aviso = { resetsAt: number; nivel: number }
 type RitmoSalvo = { resetsAt: number; ritmo: number }
+type Config = { abrirPainel: boolean; idioma: Idioma }
 
 const PAINEL = 'uso'
 const linha = atom({ plugin: 'tokenometro', key: 'linha' } as const, null)
@@ -33,6 +36,8 @@ let noPainel = false
 // na frente. Nas outras telas fica a linha de status: o VS Code desenha a faixa como um quadro com título,
 // que ocupa mais espaço que a linha
 let naFaixa = false
+// Atualizado a cada leitura do config.json, para a troca de idioma valer já na próxima resposta
+let idioma: Idioma = 'pt-BR'
 
 function sairDaLinhaDeStatus($: EngineInterface): void {
   if (naFaixa) return
@@ -40,9 +45,11 @@ function sairDaLinhaDeStatus($: EngineInterface): void {
   $.ui.status(undefined)
 }
 
-const SEM_LEITURA =
-  'Ainda não há leitura do limite nesta sessão.\n' +
-  'Ela chega com a primeira resposta do modelo e só existe em plano de assinatura.'
+function semLeitura(): string {
+  return idioma === 'en'
+    ? 'No limit reading in this session yet.\nIt arrives with the first model response and only exists on subscription plans.'
+    : 'Ainda não há leitura do limite nesta sessão.\nEla chega com a primeira resposta do modelo e só existe em plano de assinatura.'
+}
 
 async function mostrar($: EngineInterface, texto: string | undefined): Promise<void> {
   await update($, linha, () => texto ?? null)
@@ -63,6 +70,7 @@ async function atualizar(
   avisar: boolean,
 ): Promise<{ previsoes: Previsao[]; ignorados: SessionRateLimit[]; agora: number; formato: FormatoHora }> {
   const agora = await $.clock.now()
+  idioma = (await lerConfig($)).idioma
   // Lido a cada vez: trocar o formato ou o fuso no /config muda o mod junto com o painel de uso
   const formato = lerFormato(await $.settings.read({ key: 'timeFormat' }), await $.settings.read({ key: 'timeZone' }))
   const perfil = (await $.store.get('perfil')) as Perfil | undefined
@@ -100,12 +108,12 @@ async function atualizar(
       const aviso = (await $.store.get(chaveAviso)) as Aviso | undefined
       const jaAvisou = aviso !== undefined && aviso.resetsAt === resetsAt && aviso.nivel >= nivel
       if (!jaAvisou) {
-        $.ui.toast(textoAviso(previsao, agora, formato), { timeoutMs: 12_000 })
+        $.ui.toast(textoAviso(previsao, agora, formato, idioma), { timeoutMs: 12_000 })
         await $.store.set(chaveAviso, { resetsAt, nivel })
       }
     }
   }
-  const linhaPainel = textoStatus(previsoes, agora, formato)
+  const linhaPainel = textoStatus(previsoes, agora, formato, idioma)
   await mostrar($, linhaPainel)
   if (previsoes.length) await $.store.set('ultima', { linha: linhaPainel ?? null, validaAte: Math.min(...previsoes.map(p => p.resetsAt)) })
   await gravarArquivo($, previsoes, agora, formato, linhaPainel)
@@ -117,16 +125,17 @@ async function pastaDados($: EngineInterface): Promise<string | undefined> {
   return pasta ? `${pasta}/.claude/tokenometro` : undefined
 }
 
-// A opção fica na extensão do VS Code, que grava o config.json; sem o arquivo, o painel não abre sozinho
-// e a previsão fica na linha de status
-async function abrirAoIniciar($: EngineInterface): Promise<boolean> {
+// As opções ficam na extensão do VS Code, que grava o config.json; sem o arquivo, vale o padrão: painel fechado
+// e textos em português
+async function lerConfig($: EngineInterface): Promise<Config> {
+  const padrao: Config = { abrirPainel: false, idioma: 'pt-BR' }
   const pasta = await pastaDados($)
-  if (!pasta) return false
+  if (!pasta) return padrao
   try {
-    const config = JSON.parse(String(await $.fs.read(`${pasta}/config.json`))) as { abrirPainel?: unknown }
-    return config.abrirPainel === true
+    const config = JSON.parse(String(await $.fs.read(`${pasta}/config.json`))) as { abrirPainel?: unknown; idioma?: unknown }
+    return { abrirPainel: config.abrirPainel === true, idioma: lerIdioma(config.idioma) }
   } catch {
-    return false
+    return padrao
   }
 }
 
@@ -147,11 +156,11 @@ async function gravarArquivo(
     emRisco: previsoes.some(vaiEsgotar),
     limites: previsoes.map(p => ({
       kind: p.kind,
-      nome: nomeLimite(p.kind),
+      nome: nomeLimite(p.kind, idioma),
       pct: p.pct,
       resetsAt: p.resetsAt,
       esgotaEm: vaiEsgotar(p) ? p.esgotaEm : null,
-      detalhe: textoDetalhe(p, agora, formato),
+      detalhe: textoDetalhe(p, agora, formato, idioma),
     })),
   }
   await $.fs.write(`${pasta}/previsao.json`, JSON.stringify(conteudo, null, 2))
@@ -163,14 +172,32 @@ async function mostrarUltima($: EngineInterface): Promise<void> {
   if (ultima?.linha && ultima.validaAte > (await $.clock.now())) await mostrar($, ultima.linha)
 }
 
+// O detalhe sai na conversa; o painel não abre aqui porque no terminal em tela cheia ele ocupa uma coluna inteira
+async function detalhar($: EngineInterface): Promise<{ text: string }> {
+  const uso = await $.session.usage()
+  const { previsoes, ignorados, agora, formato } = await atualizar($, uso.rateLimits, false)
+  if (!previsoes.length && !ignorados.length) return { text: semLeitura() }
+  // Limite que o mod não sabe a duração: lista o nome interno para dar para incluir depois
+  const desconhecidos = ignorados.map(l =>
+    idioma === 'en'
+      ? `Limit not recognized by the mod: ${l.kind} (${Math.round(l.percentUsed)}% used).`
+      : `Limite não reconhecido pelo mod: ${l.kind} (${Math.round(l.percentUsed)}% usado).`,
+  )
+  return { text: [...previsoes.map(p => textoDetalhe(p, agora, formato, idioma)), ...desconhecidos].join('\n\n') }
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const ran = await next(e)
-    await $.command.register({
-      name: 'limite',
-      description: 'Mostra a previsão dos limites de uso no seu ritmo',
-    })
-    if (await abrirAoIniciar($)) await abrirPainel($)
+    const config = await lerConfig($)
+    idioma = config.idioma
+    // O comando é registrado na sessão no idioma escolhido: /limite em português, /limit em inglês
+    await $.command.register(
+      idioma === 'en'
+        ? { name: 'limit', description: 'Shows the usage limit forecast at your pace' }
+        : { name: 'limite', description: 'Mostra a previsão dos limites de uso no seu ritmo' },
+    )
+    if (config.abrirPainel) await abrirPainel($)
     const uso = await $.session.usage()
     if (uso.rateLimits.length) await atualizar($, uso.rateLimits, false)
     else await mostrarUltima($)
@@ -185,19 +212,12 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // O detalhe sai na conversa; o painel não abre aqui porque no terminal em tela cheia ele ocupa uma coluna inteira
-  on('command.run', { command: 'limite' }, async $ => {
-    const uso = await $.session.usage()
-    const { previsoes, ignorados, agora, formato } = await atualizar($, uso.rateLimits, false)
-    if (!previsoes.length && !ignorados.length) return { text: SEM_LEITURA }
-    // Limite que o mod não sabe a duração: lista o nome interno para dar para incluir depois
-    const desconhecidos = ignorados.map(l => `Limite não reconhecido pelo mod: ${l.kind} (${Math.round(l.percentUsed)}% usado).`)
-    return { text: [...previsoes.map(p => textoDetalhe(p, agora, formato)), ...desconhecidos].join('\n\n') }
-  })
+  on('command.run', { command: 'limite' }, detalhar)
+  on('command.run', { command: 'limit' }, detalhar)
 
   // Fechou o painel: a previsão volta para a linha de status
   on('ui.close', async ($, e, next) => {
-    if (e.id === PAINEL && e.origin !== 'unload') {
+    if (e.id === PAINEL && e.origin.kind !== 'unload') {
       noPainel = false
       if (!naFaixa) $.ui.status((await read($, linha)) ?? undefined)
     }
@@ -207,11 +227,13 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane', requestId: PAINEL }, async ($, e) => {
     const { Text } = $.ui.resolve(e)
     const texto = await read($, linha)
+    const aguardando =
+      idioma === 'en' ? 'Token usage: waiting for the first limit reading.' : 'Uso de tokens: aguardando a primeira leitura do limite.'
     // Acima do prompt fica numa linha só, cortada no fim; na coluna estreita ao lado da conversa quebra a linha,
     // senão a data de renovação some
     return (
       <Text wrap={e.props.placement === 'dock' ? 'wrap' : 'truncate-end'} size="caption" dimColor={texto === null}>
-        {texto ?? 'Uso de tokens: aguardando a primeira leitura do limite.'}
+        {texto ?? aguardando}
       </Text>
     )
   })
@@ -221,7 +243,7 @@ export const register: Register = on => {
     if (e.surface !== 'terminal') return next(e)
     sairDaLinhaDeStatus($)
     const texto = await read($, linha)
-    if (e.props.hasSurvey || noPainel || texto === null || texto === DENTRO_DOS_LIMITES) return next(e)
+    if (e.props.hasSurvey || noPainel || texto === null || eDentroDosLimites(texto)) return next(e)
     const { Text } = $.ui.resolve(e)
     return (
       <Text color="warning" wrap="truncate-end">
@@ -234,7 +256,7 @@ export const register: Register = on => {
     if (e.surface !== 'terminal') return next(e)
     sairDaLinhaDeStatus($)
     const texto = await read($, linha)
-    if (noPainel || texto !== DENTRO_DOS_LIMITES) return next(e)
+    if (noPainel || texto === null || !eDentroDosLimites(texto)) return next(e)
     return next({ ...e, props: { ...e.props, tail: `· ${texto}` } })
   })
 }

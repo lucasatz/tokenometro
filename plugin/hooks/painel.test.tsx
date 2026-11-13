@@ -16,12 +16,12 @@ const PAINEL = {
 
 test('o painel mostra a linha sem nome de plugin, no VS Code e no terminal', async ($, on) => {
   on('state.get', () => ({
-    value: { value: '⚠ 5hr: irá esgotar 11:40 (Resets 13:10)', version: 1 },
+    value: { value: '⚠ 5h: irá esgotar 11:40 (renova 13:10)', version: 1 },
   }))
   for (const surface of ['vscode', 'terminal'] as const) {
     const ui = await $.ui.mount({ ...PAINEL, surface })
     const texto = await ui.find({ type: 'Text' })
-    expect(texto?.text).toBe('⚠ 5hr: irá esgotar 11:40 (Resets 13:10)')
+    expect(texto?.text).toBe('⚠ 5h: irá esgotar 11:40 (renova 13:10)')
     await ui.unmount()
   }
 })
@@ -48,9 +48,9 @@ const DICA = {
 
 test('no terminal, o aviso aparece na faixa acima do prompt', async ($, on) => {
   on('ui.status', () => ({ value: undefined }))
-  on('state.get', () => ({ value: { value: '⚠ 5hr: irá esgotar 11:40 (Resets 13:10)', version: 1 } }))
+  on('state.get', () => ({ value: { value: '⚠ 5h: irá esgotar 11:40 (renova 13:10)', version: 1 } }))
   const ui = await $.ui.mount({ ...FAIXA, surface: 'terminal' })
-  expect((await ui.find({ type: 'Text' }))?.text).toBe('⚠ 5hr: irá esgotar 11:40 (Resets 13:10)')
+  expect((await ui.find({ type: 'Text' }))?.text).toBe('⚠ 5h: irá esgotar 11:40 (renova 13:10)')
   await ui.unmount()
 })
 
@@ -60,7 +60,7 @@ test('fora do terminal a faixa não é usada: a previsão fica na linha de statu
     status = e.text
     return { value: undefined }
   })
-  on('state.get', () => ({ value: { value: '⚠ 5hr: irá esgotar 11:40 (Resets 13:10)', version: 1 } }))
+  on('state.get', () => ({ value: { value: '⚠ 5h: irá esgotar 11:40 (renova 13:10)', version: 1 } }))
   for (const surface of ['vscode', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...FAIXA, surface })
     expect(await ui.find({ type: 'Text', text: /irá esgotar/ })).toBeUndefined()
