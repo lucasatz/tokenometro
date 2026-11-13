@@ -22,11 +22,16 @@ function activate(context) {
     vscode.commands.registerCommand('tokenometro.mostrarDetalhes', mostrarDetalhes),
     vscode.commands.registerCommand('tokenometro.instalarPlugin', () => instalarPlugin(context, true)),
     vscode.commands.registerCommand('tokenometro.removerPlugin', removerPlugin),
+    vscode.commands.registerCommand('tokenometro.mudarIdioma', mudarIdioma),
   )
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(e => {
       if (e.affectsConfiguration('tokenometro.barraDeStatus')) atualizar()
       if (e.affectsConfiguration('tokenometro.abrirPainelAoIniciar')) gravarConfig()
+      if (e.affectsConfiguration('tokenometro.idioma')) {
+        gravarConfig()
+        atualizar()
+      }
     }),
   )
   gravarConfig()
@@ -46,6 +51,15 @@ function activate(context) {
 
 function deactivate() {}
 
+// Português do Brasil é o padrão; o inglês só quando escolhido na configuração tokenometro.idioma
+function idioma() {
+  return vscode.workspace.getConfiguration('tokenometro').get('idioma', 'pt-BR') === 'en' ? 'en' : 'pt-BR'
+}
+
+function t(portugues, ingles) {
+  return idioma() === 'en' ? ingles : portugues
+}
+
 function lerJson(arquivo) {
   try {
     return JSON.parse(fs.readFileSync(arquivo, 'utf8'))
@@ -60,15 +74,33 @@ function lerSettings() {
   return lerJson(SETTINGS)
 }
 
-// O plugin roda dentro do Claude Code e não enxerga as configurações do VS Code: recebe a opção por este arquivo
+// O plugin roda dentro do Claude Code e não enxerga as configurações do VS Code: recebe as opções por este arquivo
 function gravarConfig() {
   const abrirPainel = vscode.workspace.getConfiguration('tokenometro').get('abrirPainelAoIniciar', false)
   try {
     fs.mkdirSync(PASTA_DADOS, { recursive: true })
-    fs.writeFileSync(CONFIG, `${JSON.stringify({ abrirPainel }, null, 2)}\n`)
+    fs.writeFileSync(CONFIG, `${JSON.stringify({ abrirPainel, idioma: idioma() }, null, 2)}\n`)
   } catch {
-    // Sem permissão de escrita o plugin segue o padrão, que é não abrir o painel sozinho
+    // Sem permissão de escrita o plugin segue o padrão: painel fechado e textos em português
   }
+}
+
+async function mudarIdioma() {
+  const opcoes = [
+    { label: 'Português (Brasil)', idioma: 'pt-BR' },
+    { label: 'English', idioma: 'en' },
+  ]
+  const escolha = await vscode.window.showQuickPick(opcoes, {
+    placeHolder: t('Idioma da previsão no Claude Code', 'Language of the forecast in Claude Code'),
+  })
+  if (!escolha) return
+  await vscode.workspace.getConfiguration('tokenometro').update('idioma', escolha.idioma, vscode.ConfigurationTarget.Global)
+  vscode.window.showInformationMessage(
+    t(
+      'Idioma alterado.\nVale a partir da próxima resposta do Claude Code.',
+      'Language changed.\nIt applies from the next Claude Code response.',
+    ),
+  )
 }
 
 function normalizar(pasta) {
@@ -104,7 +136,9 @@ function sincronizarPlugin(context) {
     copiarPlugin(context)
   } catch (erro) {
     // Sem permissão de escrita fica a versão anterior do plugin, que continua funcionando
-    vscode.window.showWarningMessage(`Não foi possível atualizar o plugin do Claude Code: ${erro.message}`)
+    vscode.window.showWarningMessage(
+      t(`Não foi possível atualizar o plugin do Claude Code: ${erro.message}`, `Could not update the Claude Code plugin: ${erro.message}`),
+    )
   }
 }
 
@@ -116,23 +150,29 @@ async function oferecerInstalacao(context) {
 
 async function instalarPlugin(context, perguntar) {
   if (perguntar) {
+    const instalar = t('Instalar', 'Install')
     const resposta = await vscode.window.showInformationMessage(
-      'Para mostrar a previsão, o Tokenômetro instala um plugin no Claude Code.',
+      t('Para mostrar a previsão, o Tokenômetro instala um plugin no Claude Code.', 'To show the forecast, Tokenômetro installs a plugin in Claude Code.'),
       {
         modal: true,
-        detail:
+        detail: t(
           `O plugin é copiado para ${PASTA_PLUGIN} e essa pasta é adicionada em CLAUDE_CODE_PLUGIN_DIRS, no ${SETTINGS}.\n` +
-          'Ele começa a valer nas próximas sessões do Claude Code.',
+            'Ele começa a valer nas próximas sessões do Claude Code.',
+          `The plugin is copied to ${PASTA_PLUGIN} and that folder is added to CLAUDE_CODE_PLUGIN_DIRS, in ${SETTINGS}.\n` +
+            'It takes effect in the next Claude Code sessions.',
+        ),
       },
-      'Instalar',
+      instalar,
     )
-    if (resposta !== 'Instalar') return
+    if (resposta !== instalar) return
   }
   const settings = lerSettings()
   if (settings === null) {
     vscode.window.showErrorMessage(
-      `Não foi possível ler o ${SETTINGS}.\n` +
-        'Corrija o arquivo e rode o comando "Tokenômetro: Instalar plugin no Claude Code".',
+      t(
+        `Não foi possível ler o ${SETTINGS}.\nCorrija o arquivo e rode o comando "Tokenômetro: Instalar plugin no Claude Code".`,
+        `Could not read ${SETTINGS}.\nFix the file and run the command "Tokenômetro: Instalar plugin no Claude Code".`,
+      ),
     )
     return
   }
@@ -144,14 +184,21 @@ async function instalarPlugin(context, perguntar) {
     gravarSettings(settings)
   } catch (erro) {
     vscode.window.showErrorMessage(
-      `Não foi possível instalar o plugin do Claude Code: ${erro.message}\n` +
-        'Confira a permissão de escrita na pasta ~/.claude e rode o comando "Tokenômetro: Instalar plugin no Claude Code".',
+      t(
+        `Não foi possível instalar o plugin do Claude Code: ${erro.message}\n` +
+          'Confira a permissão de escrita na pasta ~/.claude e rode o comando "Tokenômetro: Instalar plugin no Claude Code".',
+        `Could not install the Claude Code plugin: ${erro.message}\n` +
+          'Check write permission on the ~/.claude folder and run the command "Tokenômetro: Instalar plugin no Claude Code".',
+      ),
     )
     return
   }
   atualizar()
   vscode.window.showInformationMessage(
-    'Plugin instalado.\nAbra uma nova sessão do Claude Code para a previsão começar a aparecer.',
+    t(
+      'Plugin instalado.\nAbra uma nova sessão do Claude Code para a previsão começar a aparecer.',
+      'Plugin installed.\nOpen a new Claude Code session for the forecast to start showing.',
+    ),
   )
 }
 
@@ -162,15 +209,24 @@ function gravarSettings(settings) {
 }
 
 async function removerPlugin() {
+  const remover = t('Remover', 'Remove')
   const resposta = await vscode.window.showWarningMessage(
-    'Remover o plugin do Claude Code?',
-    { modal: true, detail: 'A previsão deixa de ser calculada a partir da próxima sessão do Claude Code.' },
-    'Remover',
+    t('Remover o plugin do Claude Code?', 'Remove the Claude Code plugin?'),
+    {
+      modal: true,
+      detail: t(
+        'A previsão deixa de ser calculada a partir da próxima sessão do Claude Code.',
+        'The forecast stops being calculated from the next Claude Code session.',
+      ),
+    },
+    remover,
   )
-  if (resposta !== 'Remover') return
+  if (resposta !== remover) return
   const settings = lerSettings()
   if (settings === null) {
-    vscode.window.showErrorMessage(`Não foi possível ler o ${SETTINGS}.\nCorrija o arquivo e tente de novo.`)
+    vscode.window.showErrorMessage(
+      t(`Não foi possível ler o ${SETTINGS}.\nCorrija o arquivo e tente de novo.`, `Could not read ${SETTINGS}.\nFix the file and try again.`),
+    )
     return
   }
   const pastas = pastasPlugins(settings).filter(p => normalizar(p) !== normalizar(PASTA_PLUGIN))
@@ -186,13 +242,17 @@ async function removerPlugin() {
     fs.rmSync(CONFIG, { force: true })
   } catch (erro) {
     vscode.window.showErrorMessage(
-      `Não foi possível remover o plugin do Claude Code: ${erro.message}\n` +
-        'Confira a permissão de escrita na pasta ~/.claude e tente de novo.',
+      t(
+        `Não foi possível remover o plugin do Claude Code: ${erro.message}\nConfira a permissão de escrita na pasta ~/.claude e tente de novo.`,
+        `Could not remove the Claude Code plugin: ${erro.message}\nCheck write permission on the ~/.claude folder and try again.`,
+      ),
     )
     return
   }
   atualizar()
-  vscode.window.showInformationMessage('Plugin removido.\nA previsão some a partir da próxima sessão do Claude Code.')
+  vscode.window.showInformationMessage(
+    t('Plugin removido.\nA previsão some a partir da próxima sessão do Claude Code.', 'Plugin removed.\nThe forecast disappears from the next Claude Code session.'),
+  )
 }
 
 function observar() {
@@ -215,7 +275,11 @@ function lerPrevisao() {
 }
 
 function horaCurta(ms) {
-  return new Date(ms).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  return new Date(ms).toLocaleTimeString(idioma() === 'en' ? 'en-US' : 'pt-BR', { hour: '2-digit', minute: '2-digit' })
+}
+
+function dentroDosLimites() {
+  return t('Uso de tokens dentro dos limites', 'Token usage within limits')
 }
 
 // A previsão aparece no painel do Claude Code, pelo plugin; a barra de status do VS Code é opcional
@@ -233,10 +297,10 @@ function atualizar() {
   item.backgroundColor = undefined
   if (!previsao) {
     const instalado = pluginInstalado()
-    item.text = '$(pulse) Tokenômetro: aguardando leitura'
+    item.text = t('$(pulse) Tokenômetro: aguardando leitura', '$(pulse) Tokenômetro: waiting for a reading')
     item.tooltip = instalado
-      ? 'A previsão aparece depois da próxima resposta do Claude Code.'
-      : 'Clique para instalar o plugin do Claude Code que calcula a previsão.'
+      ? t('A previsão aparece depois da próxima resposta do Claude Code.', 'The forecast shows up after the next Claude Code response.')
+      : t('Clique para instalar o plugin do Claude Code que calcula a previsão.', 'Click to install the Claude Code plugin that calculates the forecast.')
     item.command = instalado ? 'tokenometro.mostrarDetalhes' : 'tokenometro.instalarPlugin'
     item.show()
     return
@@ -245,12 +309,12 @@ function atualizar() {
   // Leitura antiga, ou algum limite já renovou desde ela: a previsão gravada não vale mais
   const antiga = agora - previsao.atualizadoEm > VALIDADE_MS || previsao.limites.some(l => l.resetsAt <= agora)
   if (antiga) {
-    item.text = '$(history) Tokenômetro: sem leitura recente'
+    item.text = t('$(history) Tokenômetro: sem leitura recente', '$(history) Tokenômetro: no recent reading')
   } else if (previsao.emRisco) {
     item.text = `$(warning) ${String(previsao.linha || '').replace(/^⚠\s*/, '')}`
     item.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground')
   } else {
-    item.text = `$(check) ${previsao.linha || 'Uso de tokens dentro dos limites'}`
+    item.text = `$(check) ${previsao.linha || dentroDosLimites()}`
   }
   item.tooltip = montarDica(previsao, antiga)
   item.show()
@@ -258,13 +322,14 @@ function atualizar() {
 
 function montarDica(previsao, antiga) {
   const dica = new vscode.MarkdownString()
-  dica.appendMarkdown('**Previsão de uso do Claude Code**\n\n')
+  dica.appendMarkdown(t('**Previsão de uso do Claude Code**\n\n', '**Claude Code usage forecast**\n\n'))
   for (const limite of previsao.limites) {
     dica.appendText(limite.detalhe)
     dica.appendMarkdown('\n\n---\n\n')
   }
-  const quando = `Atualizado às ${horaCurta(previsao.atualizadoEm)}`
-  dica.appendMarkdown(antiga ? `_${quando}. Envie uma mensagem ao Claude Code para atualizar._` : `_${quando}_`)
+  const quando = t(`Atualizado às ${horaCurta(previsao.atualizadoEm)}`, `Updated at ${horaCurta(previsao.atualizadoEm)}`)
+  const pedido = t('Envie uma mensagem ao Claude Code para atualizar.', 'Send a message to Claude Code to refresh.')
+  dica.appendMarkdown(antiga ? `_${quando}. ${pedido}_` : `_${quando}_`)
   return dica
 }
 
@@ -273,14 +338,18 @@ async function mostrarDetalhes() {
   if (!previsao) {
     vscode.window.showInformationMessage(
       pluginInstalado()
-        ? 'Ainda não há leitura do limite.\nEla chega com a próxima resposta do Claude Code.'
-        : 'O plugin do Claude Code que calcula a previsão não está instalado.\nRode o comando "Tokenômetro: Instalar plugin no Claude Code".',
+        ? t('Ainda não há leitura do limite.\nEla chega com a próxima resposta do Claude Code.', 'No limit reading yet.\nIt arrives with the next Claude Code response.')
+        : t(
+            'O plugin do Claude Code que calcula a previsão não está instalado.\nRode o comando "Tokenômetro: Instalar plugin no Claude Code".',
+            'The Claude Code plugin that calculates the forecast is not installed.\nRun the command "Tokenômetro: Instalar plugin no Claude Code".',
+          ),
     )
     return
   }
-  vscode.window.showInformationMessage(previsao.linha || 'Uso de tokens dentro dos limites', {
+  const atualizado = t(`Atualizado às ${horaCurta(previsao.atualizadoEm)}.`, `Updated at ${horaCurta(previsao.atualizadoEm)}.`)
+  vscode.window.showInformationMessage(previsao.linha || dentroDosLimites(), {
     modal: true,
-    detail: `${previsao.limites.map(l => l.detalhe).join('\n\n')}\n\nAtualizado às ${horaCurta(previsao.atualizadoEm)}.`,
+    detail: `${previsao.limites.map(l => l.detalhe).join('\n\n')}\n\n${atualizado}`,
   })
 }
 

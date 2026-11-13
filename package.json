@@ -2,7 +2,7 @@
   "name": "tokenometro",
   "displayName": "Tokenômetro",
   "description": "Saiba se, no seu ritmo, os tokens do Claude Code vão acabar antes de o limite renovar.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "lucasatz",
   "license": "MIT",
   "repository": {
@@ -47,6 +47,20 @@
     "configuration": {
       "title": "Tokenômetro",
       "properties": {
+        "tokenometro.idioma": {
+          "type": "string",
+          "enum": [
+            "pt-BR",
+            "en"
+          ],
+          "enumDescriptions": [
+            "Português (Brasil)",
+            "English"
+          ],
+          "default": "pt-BR",
+          "description": "Idioma da previsão no Claude Code: a linha, o aviso na tela e o comando /limite (em inglês, /limit). Language of the forecast in Claude Code.",
+          "order": 0
+        },
         "tokenometro.barraDeStatus": {
           "type": "boolean",
           "default": false,
@@ -73,6 +87,11 @@
       {
         "command": "tokenometro.removerPlugin",
         "title": "Remover plugin do Claude Code",
+        "category": "Tokenômetro"
+      },
+      {
+        "command": "tokenometro.mudarIdioma",
+        "title": "Mudar idioma (Change language)",
         "category": "Tokenômetro"
       }
     ]

@@ -1,5 +1,11 @@
 # Alterações
 
+## 0.1.3
+
+- Linha da previsão toda em português: `⚠ 5h: irá esgotar 15:22 (renova 17:00)` e `⚠ 7 dias: irá esgotar qui, 19/11 às 15:00 (renova sex, 20/11 às 00:00)`, com a hora em 24 horas.
+- Limite que já acabou aparece como `esgotado`, e a menos de um minuto do fim, como `esgotando agora`. Antes aparecia "irá esgotar soon".
+- Opção de idioma: português do Brasil por padrão, ou inglês, pela configuração **Tokenômetro: Idioma** ou pelo comando **Tokenômetro: Mudar idioma**. Em inglês, a linha segue o painel de uso do Claude Code e o comando vira `/limit`.
+
 ## 0.1.2
 
 - No terminal, o aviso aparece na faixa logo acima do campo de mensagem, sem o nome do plugin na frente, e só quando um limite vai acabar antes de renovar. Dentro dos limites, o estado fica discreto no fim da linha de dicas, abaixo do campo.

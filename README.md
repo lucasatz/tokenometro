@@ -17,10 +17,13 @@ No VS Code, uma linha acima do campo de mensagem do Claude Code, depois do nome 
 | Linha | O que quer dizer |
 |---|---|
 | `Uso de tokens dentro dos limites` | No seu ritmo, nenhum limite acaba antes de renovar. |
-| `⚠ 5hr: irá esgotar 11:40 (Resets 13:10)` | O limite de 5 horas acaba às 11:40, mas só renova às 13:10. |
-| `⚠ 7 day: irá esgotar Thu, Nov 19 at 15:00 (Resets Fri, Nov 20 at 00:00)` | O limite semanal acaba na quinta às 15:00, mas só renova na sexta. |
+| `⚠ 5h: irá esgotar 11:40 (renova 13:10)` | O limite de 5 horas acaba às 11:40, mas só renova às 13:10. |
+| `⚠ 7 dias: irá esgotar qui, 19/11 às 15:00 (renova sex, 20/11 às 00:00)` | O limite semanal acaba na quinta às 15:00, mas só renova na sexta. |
+| `⚠ 5h: esgotado (renova 18:20)` | O limite de 5 horas já acabou e volta às 18:20. |
 
-Os nomes dos limites e o formato da data são os mesmos do painel de uso do Claude Code. A hora segue a sua configuração de formato (`timeFormat`) e de fuso (`timeZone`) do Claude Code: com 12 horas, por exemplo, aparece `11:40 AM`.
+Por padrão, tudo em português, com a hora em 24 horas. O fuso segue a configuração `timeZone` do Claude Code, e a hora só sai em 12 horas se o `timeFormat` dele estiver em `12-hour`.
+
+Prefere inglês? Rode o comando **Tokenômetro: Mudar idioma** ou mude a configuração **Tokenômetro: Idioma**. A linha passa a seguir o painel de uso do Claude Code (`⚠ 5hr: runs out at 11:40 AM (Resets 1:10 PM)`), e o comando vira `/limit`.
 
 Quando a previsão passa a dizer que um limite vai acabar, aparece também um aviso na tela, uma vez só:
 
@@ -36,8 +39,8 @@ Digite `/limite` no Claude Code para ver o detalhe na conversa: quanto já foi u
 | Situação | O que aparece | O que dá para fazer |
 |---|---|---|
 | Segunda de manhã, uso normal | `Uso de tokens dentro dos limites` | Nada. Siga trabalhando. |
-| Refatoração pesada: o limite de 5 horas sobe rápido | `⚠ 5hr: irá esgotar 11:40 (Resets 13:10)` | Deixe as tarefas pesadas para depois das 13:10 ou use sessões mais curtas até lá. |
-| Quarta-feira, a semana já foi intensa | `⚠ 7 day: irá esgotar Thu, Nov 19 at 15:00 (…)` | Distribua o uso: dias mais leves agora, prioridade para o que é urgente. |
+| Refatoração pesada: o limite de 5 horas sobe rápido | `⚠ 5h: irá esgotar 11:40 (renova 13:10)` | Deixe as tarefas pesadas para depois das 13:10 ou use sessões mais curtas até lá. |
+| Quarta-feira, a semana já foi intensa | `⚠ 7 dias: irá esgotar qui, 19/11 às 15:00 (…)` | Distribua o uso: dias mais leves agora, prioridade para o que é urgente. |
 | Sexta à tarde, com bastante uso na semana, mas você não trabalha no fim de semana | `Uso de tokens dentro dos limites` | Nada. O fim de semana em que você não usa não entra na conta. |
 | Segunda de manhã, a semana do limite acabou de renovar | Previsão já disponível | A previsão usa o ritmo da semana anterior até ter dados da semana nova. |
 | Você reabriu o VS Code | A última previsão continua na tela | Ela se atualiza com a próxima resposta do Claude Code. |
@@ -48,7 +51,7 @@ Digite `/limite` no Claude Code para ver o detalhe na conversa: quanto já foi u
 - **Ritmo por hora de uso:** a extensão aprende em que horas você costuma trabalhar. No começo, supõe dias úteis das 8h às 18h. Noites e fins de semana em que você não usa não contam, então o horário previsto cai dentro do seu expediente.
 - **Limite de 5 horas:** vale o ritmo dos últimos 45 minutos, que reage quando você acelera ou para.
 - **Limite semanal:** vale a média das horas de uso desde o começo da semana do limite.
-- **Hora e fuso:** seguem as configurações `timeFormat` e `timeZone` do Claude Code, as mesmas do painel de uso dele.
+- **Hora e fuso:** o fuso segue a configuração `timeZone` do Claude Code. Em português, a hora sai em 24 horas, ou em 12 horas se o `timeFormat` dele estiver em `12-hour`; em inglês, segue o painel de uso do Claude Code.
 
 ## Instalação
 
@@ -71,9 +74,11 @@ Pela paleta de comandos (Ctrl+Shift+P):
 - **Tokenômetro: Instalar plugin no Claude Code**
 - **Tokenômetro: Remover plugin do Claude Code**
 - **Tokenômetro: Mostrar previsão de uso**
+- **Tokenômetro: Mudar idioma (Change language)**
 
 ## Configuração
 
+- **Tokenômetro: Idioma** (português do Brasil por padrão): idioma da linha, do aviso na tela e do comando `/limite`. Em inglês, o comando vira `/limit`. A troca vale a partir da próxima resposta do Claude Code; o nome do comando muda na próxima sessão.
 - **Tokenômetro: Abrir Painel Ao Iniciar** (desligada por padrão): abre o painel do Tokenômetro toda vez que uma sessão começa, no lugar da linha junto ao campo de mensagem. No VS Code e no terminal em tela cheia, ele fica numa coluna ao lado da conversa; no terminal comum, acima do campo de mensagem, com uma linha de altura. A mudança vale a partir da próxima sessão.
 - **Tokenômetro: Barra De Status** (desligada por padrão): mostra a previsão também na barra de status do VS Code.
 
